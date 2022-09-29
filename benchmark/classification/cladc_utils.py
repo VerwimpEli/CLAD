@@ -1,0 +1,247 @@
+from collections import defaultdict
+
+from benchmark.utils.utils import *
+from benchmark.utils.meta import SODA_DOMAINS
+
+import datetime
+import re
+import os
+import json
+import numpy as np
+import torch.utils.data
+import torchvision
+
+from typing import Optional, Callable, Any, Sequence, Dict
+from functools import lru_cache
+from PIL import Image
+from itertools import product
+
+
+class CladClassification(torch.utils.data.Dataset):
+    """
+    A class that creates a Clad-C dataset (train, val or test), by cutting out the labelled objects in the
+    SODA10M dataset. This dataset is meant to be trained in chronological order, so far training
+    self.chronological_sort() should always be called before training, and the dataloader shouldn't be shuffling data.
+    This doens't matter for the validation and/or testset.
+
+    :param root: root directory of the datasets
+    :param ids: a sequence of the object ids that are part of the dataset
+    :param annot_file: the .json file that contains the object and image annotations for this dataset
+    :param img_size: the width and height of the cut-out objects
+    :param transform and optional callabale that transforms the cut-out objects
+    :param meta: an optional user-defined str for the current set, usefull if objects are all from the same domain.
+    """
+
+    _default_transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.3252, 0.3283, 0.3407), (0.0265, 0.0241, 0.0252))
+    ])
+
+    def __init__(
+            self,
+            root: str,
+            ids: Sequence[int],
+            annot_file: str,
+            img_size: int = 64,
+            transform: Optional[Callable] = None,
+            meta: str = None
+    ):
+        super(CladClassification).__init__()
+
+        split = annot_file.split('_')[-1].split('.')[0]
+
+        self.img_folder = os.path.join(root, 'SSLAD-2D', 'labeled', split)
+        self.ids = ids
+        self.obj_annotations, self.img_annotations = _load_obj_img_dic(annot_file)
+        self.img_size = img_size
+        self.transform = transform if transform is not None else CladClassification._default_transform
+
+        self.prev_loaded = defaultdict(int)
+        self.sorted = False
+
+        self.meta = meta
+
+    @property
+    def targets(self):
+        return [self._load_target(obj_id) for obj_id in self.ids]
+
+    def _load_image(self, obj_id: int) -> Image.Image:
+
+        file_name = self.img_annotations[self.obj_annotations[obj_id]['image_id']]['file_name']
+        img = _load_image(os.path.join(self.img_folder, file_name))
+
+        yb, ye, xb, xe = squarify_bbox(self.obj_annotations[obj_id]['bbox'])
+        img = img.crop((xb, yb, xe, ye))
+        img = img.resize((self.img_size, self.img_size))
+
+        return img
+
+    def _load_target(self, obj_id: int) -> int:
+        return self.obj_annotations[obj_id]['category_id']
+
+    def _check_order(self, item):
+        """
+        Checks that the data is loaded chronologically if the dataset was sorted. This isn't completely fool-proof,
+        if chronological_sort this doens't mean anything since then the ids won't be ordered and only the indexes
+        are checked.
+        """
+        worker_info = torch.utils.data.get_worker_info()
+        worker_id = worker_info.id if worker_info is not None else 0
+
+        if item < self.prev_loaded[worker_id]:
+            raise ValueError('Loading earlier item while data was order chronologically! '
+                             'Make sure dataset is not shuffled')
+        else:
+            self.prev_loaded[worker_id] = item
+
+    def __getitem__(self, item):
+
+        if self.sorted:
+            self._check_order(item)
+
+        obj_id = self.ids[item]
+        image = self._load_image(obj_id)
+        target = self._load_target(obj_id)
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image, target
+
+    def __len__(self):
+        return len(self.ids)
+
+    def chronological_sort(self):
+        time_stamps, video_ids, sequence_ids = [], [], []
+
+        for sample in self.ids:
+            sample_image_annot = self.img_annotations[self.obj_annotations[sample]["image_id"]]
+
+            try:
+                time_stamp = datetime.datetime.strptime(sample_image_annot["date"].strip() +
+                                                        sample_image_annot["time"].strip(), '%Y%m%d%H%M%S')
+            except ValueError:
+                try:
+                    time_stamp = datetime.datetime.strptime(sample_image_annot["date"].strip() +
+                                                            sample_image_annot["time"].strip(), '%Y-%m-%d%H:%M:%S')
+                except ValueError:
+                    print(f"Error with image id: {sample_image_annot['id']}, time: {sample_image_annot['time']} \t"
+                          f"date: {sample_image_annot['date']}, period: {sample_image_annot['period']}")
+                    raise ValueError
+
+            video_id, seq_id = re.findall(r'\d+', sample_image_annot['file_name_old'].split('/')[-1])
+            video_ids.append(video_id)
+            sequence_ids.append(seq_id)
+            time_stamps.append(time_stamp)
+
+        # Sort by time, then video id, then seq id
+        order = np.lexsort((sequence_ids, video_ids, time_stamps))
+        self.ids = [self.ids[i] for i in order]
+        self.sorted = True
+
+
+def get_matching_set(root: str, annot_file: str, match_fn: Callable, img_size=64, transform=None,
+                     meta: str = None) -> CladClassification:
+    """
+    Creates CladClassification set from a match_fn
+
+    :param root: root path of where to look for pickled object files
+    :param annot_file: annotation file from root
+    :param match_fn: A function that takes a sample, the obj and img dicts and return T/F if a sample should be
+                     in the dataset
+    :param img_size: Size of the rescaled, cut out object
+    :param transform: Transformation to apply to images. If None, _default_transform will be applied.
+    :param meta: optional meta information in a str that will be stored with the dataset.
+    :return: CladClassification object
+    """
+
+    obj_dic, img_dic = _load_obj_img_dic(annot_file)
+    object_ids = [obj_id for obj_id in _load_object_ids(obj_dic) if match_fn(obj_id, img_dic, obj_dic)]
+
+    return CladClassification(root, object_ids, annot_file, img_size, transform, meta)
+
+
+def get_domain_sets(root: str, annot_file: str, domains: Sequence[str], img_size=64, transform=None,
+                    match_fn: Callable = None) -> Sequence[CladClassification]:
+    """
+    Creates a sequence of sets of the specified domains, with all samples matching the possibly specified match_fn
+    """
+    if match_fn is None:
+        def match_fn(*args): return True
+
+    domain_dicts = create_domain_dicts(domains)
+    domain_set = []
+    for domain_dict in domain_dicts:
+        domain_match_fn = create_match_dict_fn(domain_dict)
+        ds = get_matching_set(root, annot_file, lambda *args: domain_match_fn(*args) and match_fn(*args),
+                              img_size, transform, meta='-'.join(domain_dict.values()))
+        domain_set.append(ds)
+    return domain_set
+
+
+def create_match_dict_fn(match_dict: Dict[Any, Any]) -> Callable:
+    """
+    Creates a method that returns true if the object specified by the obj_id
+    is in the specified domain of the given match_dict.
+    :param match_dict: dictionary that should match the objects
+    :return: a function that evaluates to true if the object is from the given date
+    """
+
+    def match_fn(obj_id, img_dic, obj_dic):
+        img_annot = img_dic[obj_dic[obj_id]['image_id']]
+        for key, value in match_dict.items():
+            if img_annot[key] != value:
+                return False
+        else:
+            return True
+
+    return match_fn
+
+
+def create_domain_dicts(domains: Sequence[str]) -> Dict:
+    """
+    Creates dictionaries for the products of all values of the given domains.
+    """
+    try:
+        domain_values = product(*[SODA_DOMAINS[domain] for domain in domains])
+    except KeyError:
+        raise KeyError(f'Unkown keys, keys should be in {list(SODA_DOMAINS.keys())}')
+
+    domain_dicts = []
+    for dv in domain_values:
+        domain_dicts.append({domain: value for domain, value in zip(domains, dv)})
+
+    return domain_dicts
+
+
+@lru_cache
+def _load_obj_img_dic(annot_file: str):
+    with open(annot_file, "r") as f:
+        annot_json = json.load(f)
+
+    obj_dic = {obj["id"]: obj for obj in annot_json["annotations"]}
+    img_dic = {img["id"]: img for img in annot_json["images"]}
+
+    img_dic, obj_dic = check_if_time_date_included(img_dic, obj_dic, annot_file)
+    correct_data(img_dic, obj_dic)
+
+    return obj_dic, img_dic
+
+
+def _load_object_ids(obj_dic, min_area=1024, remove_occluded=True):
+    """
+    This prepares a set of obj_ids with possible objects, with small and occluded ones removed.
+    """
+    objects = []
+    for obj_id, obj in obj_dic.items():
+        if obj["area"] < min_area:
+            continue
+        if remove_occluded and obj["occluded"] == 0:
+            continue
+        objects.append(obj_id)
+    return objects
+
+
+@lru_cache(16)
+def _load_image(path) -> Image.Image:
+    return Image.open(path).convert('RGB')

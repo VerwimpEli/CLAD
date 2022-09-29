@@ -1,0 +1,17 @@
+SODA_DOMAINS = {
+    "period": ["Daytime", "Night"],
+    "weather": ["Clear", "Overcast", "Rainy"],
+    "city": ["Guangzhou", "Shenzhen", "Shanghai"],
+    "location": ["Citystreet", "Countryroad", "Highway"]
+}
+
+SODA_CATEGORIES = {
+    1: "Pedestrain",
+    2: "Cyclist",
+    3: "Car",
+    4: "Truck",
+    5: "Tram (Bus)",
+    6: "Tricycle"
+}
+
+START_NIGHT = "195035"
