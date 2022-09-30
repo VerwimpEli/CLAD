@@ -1,7 +1,5 @@
-from collections import defaultdict
-
-from benchmark.utils.utils import *
-from benchmark.utils.meta import SODA_DOMAINS
+from clad.utils.utils import *
+from clad.utils.meta import SODA_DOMAINS
 
 import datetime
 import re
@@ -15,6 +13,7 @@ from typing import Optional, Callable, Any, Sequence, Dict
 from functools import lru_cache
 from PIL import Image
 from itertools import product
+from collections import defaultdict
 
 
 class CladClassification(torch.utils.data.Dataset):
@@ -56,8 +55,8 @@ class CladClassification(torch.utils.data.Dataset):
         self.img_size = img_size
         self.transform = transform if transform is not None else CladClassification._default_transform
 
-        self.prev_loaded = defaultdict(int)
-        self.sorted = False
+        self._prev_loaded = defaultdict(int)
+        self._sorted = False
 
         self.meta = meta
 
@@ -82,21 +81,21 @@ class CladClassification(torch.utils.data.Dataset):
     def _check_order(self, item):
         """
         Checks that the data is loaded chronologically if the dataset was sorted. This isn't completely fool-proof,
-        if chronological_sort this doens't mean anything since then the ids won't be ordered and only the indexes
-        are checked.
+        if chronological_sort is not called this doens't mean anything since then the ids won't be ordered and only
+        the indexes are checked.
         """
         worker_info = torch.utils.data.get_worker_info()
         worker_id = worker_info.id if worker_info is not None else 0
 
-        if item < self.prev_loaded[worker_id]:
+        if item < self._prev_loaded[worker_id]:
             raise ValueError('Loading earlier item while data was order chronologically! '
                              'Make sure dataset is not shuffled')
         else:
-            self.prev_loaded[worker_id] = item
+            self._prev_loaded[worker_id] = item
 
     def __getitem__(self, item):
 
-        if self.sorted:
+        if self._sorted:
             self._check_order(item)
 
         obj_id = self.ids[item]

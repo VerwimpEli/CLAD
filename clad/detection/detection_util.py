@@ -15,7 +15,7 @@ from torch.optim import Optimizer
 from typing import Optional, List
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-import benchmark.detection.haitain_detection as haitain
+import clad.detection.haitain_detection as haitain
 
 categories = {
     1: "Pedestrain",

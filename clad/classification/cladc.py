@@ -1,4 +1,4 @@
-from benchmark.classification.cladc_utils import *
+from clad.classification.cladc_utils import *
 import os
 from torch.utils.data import ConcatDataset
 
@@ -54,8 +54,8 @@ def get_cladc_val(root: str, transform: Callable = None, img_size: int = 64, ava
         label = obj_dic[obj_id]['category_id']
         return label or (label and date == "20181015" and (time == '152030' or time == '160000'))
 
-    annot_file_1 = os.path.join(root,  'SSLAD-2D', 'labeled', 'annotations', 'instance_val.json')
-    annot_file_2 = os.path.join(root,  'SSLAD-2D', 'labeled', 'annotations', 'instance_train.json')
+    annot_file_1 = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_val.json')
+    annot_file_2 = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_train.json')
 
     val_set = ConcatDataset([
         get_matching_set(root, annot_file_1, val_match_fn_1, img_size=img_size, transform=transform),
@@ -63,7 +63,8 @@ def get_cladc_val(root: str, transform: Callable = None, img_size: int = 64, ava
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset
-        return AvalancheDataset(val_set)
+        val_set.targets = val_set.datasets[0].targets + val_set.datasets[1].targets
+        return [AvalancheDataset(val_set)]
     else:
         return val_set
 
@@ -79,7 +80,7 @@ def get_cladc_test(root: str, transform=None, img_size: int = 64, avalanche=Fals
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset
-        return AvalancheDataset(test_set)
+        return [AvalancheDataset(test_set)]
     else:
         return test_set
 
@@ -98,3 +99,15 @@ def get_cladc_domain_test(root: str, transform: Callable = None, img_size: int =
         return [AvalancheDataset(ts) for ts in test_sets if len(ts) > 0]
     else:
         return [ts for ts in test_sets if len(ts) > 0]
+
+
+def cladc_avalanche(root: str, train_trasform: Callable = None, test_transform: Callable = None, img_size: int = 64):
+    """
+    Creates an Avalanche benchmark for CLADC, with the default Avalanche functinalities.
+    """
+    from avalanche.benchmarks.scenarios.generic_benchmark_creation import create_multi_dataset_generic_benchmark
+
+    train_sets = get_cladc_train(root, train_trasform, img_size, avalanche=True)
+    test_sets = get_cladc_val(root, test_transform, img_size, avalanche=True)
+
+    return create_multi_dataset_generic_benchmark(train_datasets=train_sets, test_datasets=test_sets)

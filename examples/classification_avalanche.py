@@ -1,9 +1,15 @@
 from clad import *
+
 import torch
 import torchvision.models
 from torch.nn import Linear
-from torch.utils.data import DataLoader
+
 import argparse
+
+from avalanche.evaluation.metrics import accuracy_metrics, loss_metrics, amca_metrics
+from avalanche.logging import TextLogger, InteractiveLogger
+from avalanche.training.plugins import EvaluationPlugin
+from avalanche.training import Naive
 
 
 def main():
@@ -12,6 +18,8 @@ def main():
                         help='Name of the result files')
     parser.add_argument('--root', default="../../data",
                         help='Root folder where the data is stored')
+    parser.add_argument('--num_workers', type=int, default=4,
+                        help='Num workers to use for dataloading')
     parser.add_argument('--store', action='store_true',
                         help="If set the prediciton files required for submission will be created")
     parser.add_argument('--test', action='store_true',
@@ -24,33 +32,34 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
 
-    model = torchvision.models.resnet18(weights=False)
+    model = torchvision.models.resnet18(pretrained=True)
     model.fc = Linear(model.fc.in_features, 7, bias=True)
-    model = model.to(device)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     criterion = torch.nn.CrossEntropyLoss()
-    batch_size = 5
+    batch_size = 10
 
-    train_sets = get_cladc_train(args.root)
-    val_set = get_cladc_val(args.root)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=4)
-    tester = AMCAtester(val_loader, model, device)
+    plugins = []
 
-    for t, ts in enumerate(train_sets):
-        print(f'Training task {t}')
-        loader = DataLoader(ts, batch_size=batch_size, num_workers=4, shuffle=False)
-        for data, target in loader:
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
+    cladc = cladc_avalanche(args.root)
 
-        print('testing....')
-        tester.evaluate()
-        tester.summarize(print_results=True)
+    text_logger = TextLogger(open(f"./{args.name}.log", 'w'))
+    interactive_logger = InteractiveLogger()
+
+    eval_plugin = EvaluationPlugin(
+        accuracy_metrics(stream=True), loss_metrics(stream=True), amca_metrics(),
+        loggers=[text_logger, interactive_logger])
+
+    strategy = Naive(
+        model, optimizer, criterion, train_mb_size=batch_size, train_epochs=1, eval_mb_size=256, device=device,
+        evaluator=eval_plugin, eval_every=1, plugins=plugins)
+
+    for i, experience in enumerate(cladc.train_stream):
+
+        strategy.train(experience, eval_streams=[], shuffle=False, num_workers=args.num_workers)
+        results = strategy.eval(cladc.test_stream, num_workers=args.num_workers)
+
+        print(results)
 
     if args.store_model:
         torch.save(model.state_dict(), f'./{args.name}.pt')

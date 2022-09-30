@@ -80,6 +80,7 @@ def squarify_bbox(bbox: Sequence[int]) -> Sequence[int]:
     is used as the side of the square.
     """
     # TODO: check whether this doesn't sometimes give weird bbox if W >> H or vice versa
+    # TODO: maybe this should be gray/white padded rather than extra image?
 
     x, y, w, h = bbox
     padding = 5
@@ -106,8 +107,3 @@ def squarify_bbox(bbox: Sequence[int]) -> Sequence[int]:
         yb -= (ye - 1079)
         ye = 1079
     return yb, ye, xb, xe
-
-
-if __name__ == '__main__':
-    check_if_time_date_included(None, None)
-
