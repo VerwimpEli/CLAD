@@ -1,0 +1,16 @@
+DATASETS:
+  TRAIN: ("cladd_T1_train", )
+  TEST: ("cladd_T1_test", "cladd_T2_test", "cladd_T3_test", "cladd_T4_test")
+DATALOADER:
+  NUM_WORKERS: 0
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  DEVICE: 'cpu'
+  ROI_HEADS:
+    NUM_CLASSES: 20
+SOLVER:
+  IMS_PER_BATCH: 4
+  BASE_LR: 0.004
+  MAX_ITER: 10000
+  STEPS: (12500, )
+VERSION: 2

@@ -5,6 +5,18 @@ SODA_DOMAINS = {
     "location": ["Citystreet", "Countryroad", "Highway"]
 }
 
+CLADD_TRAIN_VAL_DOMAINS = [
+    {'city': 'Shanghai', 'location': 'Citystreet', 'period': 'Daytime', 'weather': 'Clear'},
+    {'location': 'Highway', 'period': 'Daytime', 'weather': ['Clear', 'Overcast']},
+    {'period': 'Night'},
+    {'period': 'Daytime', 'weather': 'Rainy'}]
+
+CLADD_TEST_DOMAINS = [
+    {'location': ['Citystreet', 'Countryroad'], 'period': 'Daytime', 'weather': ['Clear', 'Overcast']},
+    {'location': 'Highway', 'period': 'Daytime', 'weather': ['Clear', 'Overcast']},
+    {'period': 'Night'},
+    {'period': 'Daytime', 'weather': 'Rainy'}]
+
 SODA_CATEGORIES = {
     1: "Pedestrain",
     2: "Cyclist",

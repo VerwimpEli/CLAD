@@ -1,18 +1,15 @@
 from clad.utils.utils import *
-from clad.utils.meta import SODA_DOMAINS
 
 import datetime
 import re
 import os
-import json
 import numpy as np
 import torch.utils.data
 import torchvision
 
-from typing import Optional, Callable, Any, Sequence, Dict
+from typing import Optional, Callable, Any, Sequence, Dict, List
 from functools import lru_cache
 from PIL import Image
-from itertools import product
 from collections import defaultdict
 
 
@@ -21,7 +18,7 @@ class CladClassification(torch.utils.data.Dataset):
     A class that creates a Clad-C dataset (train, val or test), by cutting out the labelled objects in the
     SODA10M dataset. This dataset is meant to be trained in chronological order, so far training
     self.chronological_sort() should always be called before training, and the dataloader shouldn't be shuffling data.
-    This doens't matter for the validation and/or testset.
+    This doens't matter for the validation and/or testset (but it is more efficient to keep the default order).
 
     :param root: root directory of the datasets
     :param ids: a sequence of the object ids that are part of the dataset
@@ -51,7 +48,7 @@ class CladClassification(torch.utils.data.Dataset):
 
         self.img_folder = os.path.join(root, 'SSLAD-2D', 'labeled', split)
         self.ids = ids
-        self.obj_annotations, self.img_annotations = _load_obj_img_dic(annot_file)
+        self.obj_annotations, self.img_annotations = load_obj_img_dic(annot_file)
         self.img_size = img_size
         self.transform = transform if transform is not None else CladClassification._default_transform
 
@@ -136,11 +133,11 @@ class CladClassification(torch.utils.data.Dataset):
         # Sort by time, then video id, then seq id
         order = np.lexsort((sequence_ids, video_ids, time_stamps))
         self.ids = [self.ids[i] for i in order]
-        self.sorted = True
+        self._sorted = True
 
 
-def get_matching_set(root: str, annot_file: str, match_fn: Callable, img_size=64, transform=None,
-                     meta: str = None) -> CladClassification:
+def get_matching_classification_set(root: str, annot_file: str, match_fn: Callable, img_size=64, transform=None,
+                                    meta: str = None) -> CladClassification:
     """
     Creates CladClassification set from a match_fn
 
@@ -154,7 +151,7 @@ def get_matching_set(root: str, annot_file: str, match_fn: Callable, img_size=64
     :return: CladClassification object
     """
 
-    obj_dic, img_dic = _load_obj_img_dic(annot_file)
+    obj_dic, img_dic = load_obj_img_dic(annot_file)
     object_ids = [obj_id for obj_id in _load_object_ids(obj_dic) if match_fn(obj_id, img_dic, obj_dic)]
 
     return CladClassification(root, object_ids, annot_file, img_size, transform, meta)
@@ -172,8 +169,8 @@ def get_domain_sets(root: str, annot_file: str, domains: Sequence[str], img_size
     domain_set = []
     for domain_dict in domain_dicts:
         domain_match_fn = create_match_dict_fn(domain_dict)
-        ds = get_matching_set(root, annot_file, lambda *args: domain_match_fn(*args) and match_fn(*args),
-                              img_size, transform, meta='-'.join(domain_dict.values()))
+        ds = get_matching_classification_set(root, annot_file, lambda *args: domain_match_fn(*args) and match_fn(*args),
+                                             img_size, transform, meta='-'.join(domain_dict.values()))
         domain_set.append(ds)
     return domain_set
 
@@ -189,42 +186,16 @@ def create_match_dict_fn(match_dict: Dict[Any, Any]) -> Callable:
     def match_fn(obj_id, img_dic, obj_dic):
         img_annot = img_dic[obj_dic[obj_id]['image_id']]
         for key, value in match_dict.items():
-            if img_annot[key] != value:
-                return False
+            if isinstance(value, List):
+                if img_annot[key] not in value:
+                    return False
+            else:
+                if img_annot[key] != value:
+                    return False
         else:
             return True
 
     return match_fn
-
-
-def create_domain_dicts(domains: Sequence[str]) -> Dict:
-    """
-    Creates dictionaries for the products of all values of the given domains.
-    """
-    try:
-        domain_values = product(*[SODA_DOMAINS[domain] for domain in domains])
-    except KeyError:
-        raise KeyError(f'Unkown keys, keys should be in {list(SODA_DOMAINS.keys())}')
-
-    domain_dicts = []
-    for dv in domain_values:
-        domain_dicts.append({domain: value for domain, value in zip(domains, dv)})
-
-    return domain_dicts
-
-
-@lru_cache
-def _load_obj_img_dic(annot_file: str):
-    with open(annot_file, "r") as f:
-        annot_json = json.load(f)
-
-    obj_dic = {obj["id"]: obj for obj in annot_json["annotations"]}
-    img_dic = {img["id"]: img for img in annot_json["images"]}
-
-    img_dic, obj_dic = check_if_time_date_included(img_dic, obj_dic, annot_file)
-    correct_data(img_dic, obj_dic)
-
-    return obj_dic, img_dic
 
 
 def _load_object_ids(obj_dic, min_area=1024, remove_occluded=True):

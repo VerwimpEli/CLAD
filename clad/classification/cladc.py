@@ -8,7 +8,7 @@ def get_cladc_train(root: str, transform: Callable = None, img_size: int = 64, a
     """
     Returns a sequence of training sets that are chronologically ordered, defined as in the ICCV '21 challenge.
 
-    :param root: root string to the dataset
+    :param root: root path to the dataset
     :param transform: a callable transformation for the data images
     :param img_size: the width/height of the images, default is 64 by 64.
     :param avalanche: If true, this will return AvalancheDataset objects.
@@ -24,7 +24,7 @@ def get_cladc_train(root: str, transform: Callable = None, img_size: int = 64, a
 
     # All training images are part of the original validation set of SODA10M.
     annot_file = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_val.json')
-    train_sets = [get_matching_set(root, annot_file, mf, img_size=img_size, transform=transform) for mf in match_fn]
+    train_sets = [get_matching_classification_set(root, annot_file, mf, img_size=img_size, transform=transform) for mf in match_fn]
 
     for ts in train_sets:
         ts.chronological_sort()
@@ -58,8 +58,8 @@ def get_cladc_val(root: str, transform: Callable = None, img_size: int = 64, ava
     annot_file_2 = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_train.json')
 
     val_set = ConcatDataset([
-        get_matching_set(root, annot_file_1, val_match_fn_1, img_size=img_size, transform=transform),
-        get_matching_set(root, annot_file_2, val_match_fn_2, img_size=img_size, transform=transform)])
+        get_matching_classification_set(root, annot_file_1, val_match_fn_1, img_size=img_size, transform=transform),
+        get_matching_classification_set(root, annot_file_2, val_match_fn_2, img_size=img_size, transform=transform)])
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset
@@ -76,7 +76,7 @@ def get_cladc_test(root: str, transform=None, img_size: int = 64, avalanche=Fals
     """
 
     annot_file = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_test.json')
-    test_set = get_matching_set(root, annot_file, lambda *args: True, img_size=img_size, transform=transform)
+    test_set = get_matching_classification_set(root, annot_file, lambda *args: True, img_size=img_size, transform=transform)
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset

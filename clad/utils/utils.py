@@ -1,8 +1,42 @@
 import json
 import os
-from typing import Sequence
+from functools import lru_cache
+from itertools import product
+from typing import Sequence, Dict
 import requests
 import zipfile
+
+from clad.utils.meta import SODA_DOMAINS
+
+
+@lru_cache(4)
+def load_obj_img_dic(annot_file: str):
+    with open(annot_file, "r") as f:
+        annot_json = json.load(f)
+
+    obj_dic = {obj["id"]: obj for obj in annot_json["annotations"]}
+    img_dic = {img["id"]: img for img in annot_json["images"]}
+
+    img_dic, obj_dic = check_if_time_date_included(img_dic, obj_dic, annot_file)
+    correct_data(img_dic, obj_dic)
+
+    return obj_dic, img_dic
+
+
+def create_domain_dicts(domains: Sequence[str]) -> Dict:
+    """
+    Creates dictionaries for the products of all values of the given domains.
+    """
+    try:
+        domain_values = product(*[SODA_DOMAINS[domain] for domain in domains])
+    except KeyError:
+        raise KeyError(f'Unkown keys, keys should be in {list(SODA_DOMAINS.keys())}')
+
+    domain_dicts = []
+    for dv in domain_values:
+        domain_dicts.append({domain: value for domain, value in zip(domains, dv)})
+
+    return domain_dicts
 
 
 def correct_data(img_dic, obj_dic):
