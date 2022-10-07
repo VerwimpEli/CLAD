@@ -33,8 +33,6 @@ def train_cladd_detectron():
         trainer = DefaultTrainer(cfg)
         trainer.resume_or_load(resume=args.resume)
         trainer.train()
-        # Can only load last model if trained. Else the weights should be in the cfg.
-        cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
 
     setup_detectron_logger(args)
     predictor = DefaultPredictor(cfg)

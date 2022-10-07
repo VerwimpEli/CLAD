@@ -76,7 +76,8 @@ def get_cladc_test(root: str, transform=None, img_size: int = 64, avalanche=Fals
     """
 
     annot_file = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_test.json')
-    test_set = get_matching_classification_set(root, annot_file, lambda *args: True, img_size=img_size, transform=transform)
+    test_set = get_matching_classification_set(root, annot_file, lambda *args: True, img_size=img_size,
+                                               transform=transform)
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset

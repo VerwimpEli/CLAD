@@ -30,7 +30,7 @@ def main():
 
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     criterion = torch.nn.CrossEntropyLoss()
-    batch_size = 5
+    batch_size = 10
 
     train_sets = get_cladc_train(args.root)
     val_set = get_cladc_val(args.root)

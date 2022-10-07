@@ -18,7 +18,7 @@ from avalanche.training.plugins import LRSchedulerPlugin, EvaluationPlugin
 logging.basicConfig(level=logging.NOTSET)
 
 
-def train_cladd_avlanche():
+def train_cladd_avalanche():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', default='../../data', help='root of SODA10M dataset')
     parser.add_argument('--no_cuda', action='store_true', help='disable cuda training')
@@ -26,9 +26,8 @@ def train_cladd_avlanche():
 
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
 
-    torch.random.manual_seed(1234)
+    torch.random.manual_seed(1997)
     benchmark = clad.get_cladd_avalanche(args.root)
-
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
 
     num_classes = benchmark.n_classes + 1  # N classes + background
@@ -83,4 +82,4 @@ def train_cladd_avlanche():
 
 
 if __name__ == "__main__":
-    train_cladd_avlanche()
+    train_cladd_avalanche()

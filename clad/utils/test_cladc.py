@@ -76,5 +76,6 @@ def test_cladc(model: nn.Module, test_loader: DataLoader, device: str = 'cuda') 
             if pr.item() == ta:
                 correct[ta] += 1
 
-    return {label: correct[label] / length[label] for label in correct}, \
-           {label: losses[label] / length[label] for label in losses}
+    print(losses)
+    return {label: correct[label] / length[label] for label in length}, \
+           {label: losses[label] / length[label] for label in length}
