@@ -4,8 +4,6 @@
 
 # A Continual Learning benchmark for Autonomous Driving
 
--------
-
 Welcome to the official repository for the CLAD benchmark. The goal of CLAD is to introduce a more realistic testing
 bed for continual learning. We used [SODA10M](https://soda-2d.github.io/index.html), an industry scale dataset for
 autonomous driving to create two benchmarks. CLAD-C is an online classification benchmark with natural, temporal 
@@ -13,8 +11,6 @@ correlated and continuous distribution shifts. CLAD-D is a domain incremental co
 Below are further details, examples and installation instructions for both benchmarks.
 
 ## Installation
-
-------
 
 CLAD is provided as a python module and depends only on pytorch and torchvision. Optionally you can also use 
 [Avalanche](https://avalanche.continualai.org/) and [Detectron2](https://github.com/facebookresearch/detectron2) to 
@@ -38,7 +34,7 @@ _(Optional)_ Install Detectron2, follow the instructions
 
 ## CLAD-C
 
---------------------
+### Benchmark introduction
 
 CLAD-C is a classification benchmark for continual learning  from a stream of chronologically ordered images. 
 A chronological stream induces continous, yet realistic distribution 
@@ -54,36 +50,86 @@ distribution shifts not clearly visible in this plot.
     <img src="./examples/static/3a_collage.png" width="70%" alt="An illustration of the distribution shifts in CLAD-C">
 </p>
 
-The goal of the challenge is to maximize $AMCA$, or Average Mean Class Accuracy. This is the mean accuracy over all classes, averaged at different points during the datastream. We chose this metric because of the high class imbalance in the datastream and such that each class is equally important. We calculate this mean accuracy at different points during the stream, since the continual learner should be resistent to distributions shifts which isn't tested if you only test at the end of the stream. Somewhat arbitrary, we chose the switches between day and night as testing points (the $T_i$ in the plot above). This is because we noted that at these points naively trainig is most likely to have failed. Summarized, the metric we use in this challenge is:
+As an example, these are three subsequent batches if the batch size is set to 10. Note the domination of the cars and
+the multiple appearances of the same images from slightly different angles.  
+
+<p align="center">
+    <img src="./examples/static/batches_examples.png" width="70%" alt="example batches of CLAD-C">
+</p>
+
+
+### Evaluation
+The goal of the challenge is to maximize $AMCA$, or Average Mean Class Accuracy. This is the mean accuracy over all 
+classes, averaged at different points during the datastream. We chose this metric because of the high class imbalance 
+in the datastream and such that each class is equally important. We calculate this mean accuracy at different points 
+during the stream, since the continual learner should be resistent to distributions shifts which isn't tested if you 
+only test at the end of the stream. Somewhat arbitrary, we chose the switches between day and night as testing points
+(the $T_i$ in the plot above). This is because we noted that at these points naively trainig is most likely to have 
+failed. Summarized, the metric we use in this challenge is:
+
 $$
+\begin{equation}
 AMCA = \frac{1}{T} \sum_{t} \frac{1}{C} \sum_c a_{c, t}
+\end{equation}
 $$
+
 where $T$ are number of testing points and $C$ is the number of classes.
 
 
-The bechmark works both with and without `avalanche`, so use whatever you want. The `examples` folder contains both
-an example without (`classification.py`) and one with Avalanche (`classification_avalanche.py`). Feel free to test both.
+### Original Challenge Rules
 
-The benchmark is based on the SODA10M dataset, see [here](https://soda-2d.github.io/index.html). We only use the 
-labelled data, so only the labelled data should be downloaded. The original data doesn't include the necessary
-time stamps, but these will be downloaded automatically the first time. 
+The original challenge at ICCV had some restrictions, which we believe are still worth considering now. Of course, if there's a good reason to deviate from them, there's no reason for not doing so now. Below are the original rules, order by our perceived importance at this point.
 
-### Steps to run the examples
+1. Maximal replay memory size is 1000 samplesl
+2. Maximum batch size is 10
+3. No computationally heavy operations are allowed between training and testing (i.e. ideally the model should almost always be directly usable for predictions).
+4. Maximum number of parameters are 105% those of a typical Resnet50
 
-1. Download the labeled trainval and test data [here](https://soda-2d.github.io/download.html).
-The unlabeled data isn't used in this benchmark. Extract both to your `data_root` folder, keeping all
-other file and directory names the same. 
-2. Prepare the required libraries, but except the `PyTorch` libraries, no additional ones are required. 
-Code is tested with Python `3.9` and the latest `pytorch` and `torchvision` libraries. 
-You can also use the provided `env.yml` file and make a conda environment with: `conda env create -f env.yml`
-3. Make sure that the `clad` library is added to your `PYTHONPATH`. On linux: 
-`export PYTHONPATH=$PYTHONPATH:[path_to_clad]`
-4. (Optional) Install `Avalanche` from their master branch (the default pip library lacks some required
-features): `pip install git+https://github.com/ContinualAI/avalanche.git`. 
-5. Test the `classification.py` or `classification_avalanche.py` examples.
 
-Finally, you can check [this notebook](./examples/data_intro_c.ipynb) for further details on the benchmark,
-its creation and how it is evaluated. 
+
+## Minimal example
+The method ```get_cladc_train``` returns a sequence of training sets (which is actually just one large stream of data), 
+and should be trained once, in the returned 
+order. After each set, the model should be tested. `get_cladc_val` or `get_cladc_test` returns a single validation 
+or test set. For more elaborate examples, both with and without Avalanche, see [here](./examples). 
+
+```python
+import clad
+
+import torch
+import torchvision.models
+from torch.nn import Linear
+from torch.utils.data import DataLoader
+
+model = torchvision.models.resnet18(weights=False)
+model.fc = Linear(model.fc.in_features, 7, bias=True)
+
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+
+train_sets = clad.get_cladc_train('../../data')
+
+val_set = clad.get_cladc_val('../../data')
+val_loader = DataLoader(val_set, batch_size=10)
+tester = clad.AMCAtester(val_loader, model)
+
+for t, ts in enumerate(train_sets):
+    print(f'Training task {t}')
+    loader = DataLoader(ts, batch_size=10, shuffle=False)
+    for data, target in loader:
+        optimizer.zero_grad()
+        output = model(data)
+        loss = torch.nn.functional.cross_entropy(output, target)
+        loss.backward()
+        optimizer.step()
+
+    print('testing....')
+    tester.evaluate()
+    tester.summarize(print_results=True)
+```
+
+## Results
+
+To be expected soon, some baseline models and the results of the ICCV '21 challenge on this benchmark. 
 
 ## CLAD-Detection
 
