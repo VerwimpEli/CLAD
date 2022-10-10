@@ -10,6 +10,22 @@ autonomous driving to create two benchmarks. CLAD-C is an online classification 
 correlated and continuous distribution shifts. CLAD-D is a domain incremental continual object detection benchmark.
 Below are further details, examples and installation instructions for both benchmarks.
 
+## Paper
+
+A paper describing the benchmark in more detail, as well as a discussion on current Continual Learning benchmarks 
+and the solutions proposed by the participants in the 2021 ICCV challenge with CLAD can be found 
+[here](https://arxiv.org/abs/2210.03482).
+
+If you use this benchmark, please cite:
+
+```
+@article{verwimp2022cl,
+  title = {CLAD: A realistic Continual Learning benchmark for Autonomous Driving},
+  author={Verwimp, Eli and Yang, Kuo and Parisot, Sarah and Lanqing, Hong and McDonagh, Steven and P{\'e}rez-Pellitero, Eduardo and De Lange, Matthias and Tuytelaars, Tinne},
+  journal = {arXiv preprint arXiv:2210.03482},
+  year = {2022}
+}
+```
 ## Installation
 
 CLAD is provided as a python module and depends only on pytorch and torchvision. Optionally you can also use 
@@ -80,14 +96,16 @@ where $T$ are number of testing points and $C$ is the number of classes.
 
 The original challenge at ICCV had some restrictions, which we believe are still worth considering now. Of course, if there's a good reason to deviate from them, there's no reason for not doing so now. Below are the original rules, order by our perceived importance at this point.
 
-1. Maximal replay memory size is 1000 samplesl
-2. Maximum batch size is 10
-3. No computationally heavy operations are allowed between training and testing (i.e. ideally the model should almost always be directly usable for predictions).
-4. Maximum number of parameters are 105% those of a typical Resnet50
+1. Maximal replay memory size is 1000 samples
+2. The data should be trained as a stream, i.e. no repetetions of data that's not in the memory. 
+3. Maximum batch size is 10
+4. No computationally heavy operations are allowed between training and testing (i.e. ideally the model should almost
+always be directly usable for predictions).
+5. Maximum number of model parameters are 105% those of a typical Resnet50
 
 
 
-## Minimal example
+### Minimal example
 The method ```get_cladc_train``` returns a sequence of training sets (which is actually just one large stream of data), 
 and should be trained once, in the returned 
 order. After each set, the model should be tested. `get_cladc_val` or `get_cladc_test` returns a single validation 
@@ -127,9 +145,148 @@ for t, ts in enumerate(train_sets):
     tester.summarize(print_results=True)
 ```
 
-## Results
+### Results
+The graph below shows the results of finetuning and training wiht a rehearsal memory while oversampling rare classes 
+from that memory on the CLAD-C benchmark. The model used is a ResNet50, for more details, see the CLAD paper. 
 
-To be expected soon, some baseline models and the results of the ICCV '21 challenge on this benchmark. 
+<p align="center">
+    <img src="./examples/static/classes_accuracy_smaller.png" width="50%" 
+    alt="Example images of the CLAD-D tasks">
+</p>
+
+To be expected soon: some baseline models and the results of the ICCV '21 challenge on this benchmark. 
 
 ## CLAD-Detection
 
+### Benchmark introduction
+
+CLAD-D is a domain incremental continual object detection benchmark. Images from the SODA10M dataset are divided
+into four tasks, which should be learned incrementally by a machine learning model, without accessing the past data.
+The final performance of the model will be the average mAP over all tasks. The 4 tasks are defined as:
+
+Task 1: clear weather - daytime - citystreet &nbsp; &nbsp;  (4470 - 497 - 2433) <br/>
+Task 2: clear weather - daytime - **highway** &nbsp; &nbsp;  (1329 - 148 - 3126) <br/>
+Task 3: **night** &nbsp; &nbsp;  (1480 - 165 - 2968) <br/>
+Task 4: **rainy** - daytime &nbsp; &nbsp; (524 - 59 - 1442) <br/> 
+
+Where the numbers between brackets indicate respectively the number of training, validation and test images per task.
+Below are some examples images of each task, with the corresponding bounding box annotations. The domain gaps in this
+benchmark are less harsh than those in domain-incrmental learning, yet still not trivial to overcome. 
+
+<p align="center">
+    <img src="./examples/static/clad_d_examples.png" width="70%" 
+    alt="Example images of the CLAD-D tasks">
+</p>
+
+### Evaluation
+
+CLAD-D is evaluated using the average mAP @IOU = 0.5, as in VOC Pascal. We then average this over all four tasks to give each task equal weight.
+
+$$
+\text{Average mAP} = \frac{1}{T} \sum_{t} \text{mAP}_t
+$$
+
+### Original Challenge Rules
+
+The original challenge had some restirctions, some of which we believe are still worth considering. Of course, 
+if there's a good reason to deviate from them, there's no reason for not doing so now. Below are the original rules, 
+ordered by our perceived importance at this point.
+
+1. Maximal rehearsal memory of 250 samples.
+2. Only pretraining on Microsoft COCO and/or ImageNet1K.
+
+### Minimal Example
+To get the Avalanche-style benchmark, simply use the `get_cladd_avalanche` method, which will create an Avalanche
+benchmark in the usual format. Then your strategy can be created using the `ObjectDetectionTemplate`, with optional 
+training and testing plugins. 
+
+```python
+import clad
+
+import logging
+import torch
+import torchvision
+
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from avalanche.training.supervised.naive_object_detection import ObjectDetectionTemplate
+from avalanche.evaluation.metrics import loss_metrics
+from avalanche.evaluation.metrics.detection import DetectionMetrics
+from avalanche.logging import InteractiveLogger
+from avalanche.training.plugins import EvaluationPlugin
+
+logging.basicConfig(level=logging.NOTSET)
+
+# Get benchmark and models
+benchmark = clad.get_cladd_avalanche(root='../../data')
+model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True).to('cuda')
+
+# Update model and create optimizer
+in_features = model.roi_heads.box_predictor.cls_score.in_features
+model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 6+1)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.005, momentum=0.9, weight_decay=0.0005)
+
+# Create Avalanche strategy
+cl_strategy = ObjectDetectionTemplate(
+    model=model,
+    optimizer=optimizer,
+    train_mb_size=5,
+    train_epochs=1,
+    eval_mb_size=5,
+    device='cuda',
+    evaluator=EvaluationPlugin(
+        loss_metrics(epoch_running=True),
+        DetectionMetrics(default_to_coco=True),
+        loggers=[InteractiveLogger()],
+    ),
+)
+
+# Train and test loop
+for i, experience in enumerate(benchmark.train_stream):
+    cl_strategy.train(experience, num_workers=4)
+    cl_strategy.eval(benchmark.test_stream, num_workers=4)
+```
+To use Detectron2 to train CLAD-D, you only have to call `register_cladd_detectron`, which will register the CLAD-D
+datasets names to the DatasetCatalog of Detectron2. Then you can just use the names of the datasets in your config 
+files. Detectron2 doesn't support training multiple datasets sequentially, although you can probably write a script to 
+fix that. 
+```python
+import clad
+
+from detectron2.model_zoo import model_zoo
+from detectron2.engine import DefaultTrainer, DefaultPredictor
+from detectron2.config import get_cfg
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader
+
+# This registers the CLAD-D datasets in Detectron2. They're accessible with the names cladd_T[i]_[split], with
+# i the task-ID and [split] one of train/val/test.
+clad.register_cladd_detectron(root='../../data')
+
+cfg = get_cfg()
+
+# Loads basic config file and then merges with our config file
+cfg.merge_from_file(model_zoo.get_config_file("PascalVOC-Detection/faster_rcnn_R_50_C4.yaml"))
+cfg.merge_from_file('./examples/cladd_detectron_ex.yaml')
+
+trainer = DefaultTrainer(cfg)
+trainer.resume_or_load()
+trainer.train()
+
+predictor = DefaultPredictor(cfg)
+
+for test_dataset in cfg.DATASETS.TEST:
+    evaluator = COCOEvaluator(test_dataset, output_dir=f"{cfg.OUTPUT_DIR}/{test_dataset}")
+    val_loader = build_detection_test_loader(cfg, test_dataset)
+    print(inference_on_dataset(predictor.model, val_loader, evaluator))
+```
+### Results
+The graph below shows the per class fine-tune mAP's at IOU 0.5 when finetuning a Faster-RCNN model with a ResNet50 
+backbone. While the model doesn't catastrophically forget, training on a different domain distribution does harm the 
+performance on previous domains. For more details, see the CLAD paper. 
+
+<p align="center">
+    <img src="./examples/static/finetune_b.png" width="30%" 
+    alt="Example images of the CLAD-D tasks">
+</p>
+
+To be expected: more baselines and the results of in the ICCV challenge.
