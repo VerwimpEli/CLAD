@@ -123,8 +123,8 @@ def get_matching_detection_set(root: str, annot_file: str, match_fn: Callable, t
     return CladDetection(root, img_ids, annot_file, transform, meta)
 
 
-def get_domain_sets(root: str, annot_file: str, domains: Sequence[str], transform: Callable = None,
-                    match_fn: Callable = None) -> Sequence[CladDetection]:
+def get_cladd_domain_sets(root: str, annot_file: str, domains: Sequence[str], transform: Callable = None,
+                          match_fn: Callable = None) -> Sequence[CladDetection]:
     """
     :param root: Root directory of the dataset
     :param annot_file: the annotation file for the dataset

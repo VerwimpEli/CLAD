@@ -46,9 +46,11 @@ class AMCAtester:
         amca = np.mean(list(avg_accuracies.values()))
 
         if print_results:
-            for k, v in avg_accuracies.items():
-                print(f'{SODA_CATEGORIES[k]:20s}: {v * 100:.2f}%')
-            print(f'{"AMCA":20s}: {amca * 100:.2f}% \n')
+            print('Current class accuracies:')
+            for k, v in sorted(self.accs.items()):
+                print(f'{SODA_CATEGORIES[k]:20s}: {v[-1] * 100:.2f}%')
+            print(f'AMCA after {len(avg_accuracies)} test points: \n'
+                  f'{"AMCA":20s}: {amca * 100:.2f}% \n')
 
         return avg_accuracies, avg_losses, amca
 
@@ -76,6 +78,5 @@ def test_cladc(model: nn.Module, test_loader: DataLoader, device: str = 'cuda') 
             if pr.item() == ta:
                 correct[ta] += 1
 
-    print(losses)
     return {label: correct[label] / length[label] for label in length}, \
            {label: losses[label] / length[label] for label in length}

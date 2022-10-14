@@ -28,6 +28,7 @@ def train_cladd_avalanche():
 
     torch.random.manual_seed(1997)
     benchmark = clad.get_cladd_avalanche(args.root)
+
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
 
     num_classes = benchmark.n_classes + 1  # N classes + background
@@ -43,7 +44,7 @@ def train_cladd_avalanche():
     warmup_iters = min(1000, len(benchmark.train_stream[0].dataset) // train_mb_size - 1)
 
     lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=warmup_factor, total_iters=warmup_iters)
-
+    
     # CREATE THE STRATEGY INSTANCE (NAIVE)
     cl_strategy = ObjectDetectionTemplate(
         model=model,

@@ -85,8 +85,9 @@ class CladClassification(torch.utils.data.Dataset):
         worker_id = worker_info.id if worker_info is not None else 0
 
         if item < self._prev_loaded[worker_id]:
-            raise ValueError('Loading earlier item while data was order chronologically! '
-                             'Make sure dataset is not shuffled')
+            print("[WARNING] Accessing non-sequential elements in CLAD-C. This can happen for rehearsal based solutions"
+                  " etc. Make sure you're training sequentially and not repeating samples though.")
+            self._sorted = False  # Issued warning, no reason to check further now.
         else:
             self._prev_loaded[worker_id] = item
 
@@ -157,8 +158,8 @@ def get_matching_classification_set(root: str, annot_file: str, match_fn: Callab
     return CladClassification(root, object_ids, annot_file, img_size, transform, meta)
 
 
-def get_domain_sets(root: str, annot_file: str, domains: Sequence[str], img_size=64, transform=None,
-                    match_fn: Callable = None) -> Sequence[CladClassification]:
+def get_cladc_domain_sets(root: str, annot_file: str, domains: Sequence[str], img_size=64, transform=None,
+                          match_fn: Callable = None) -> Sequence[CladClassification]:
     """
     Creates a sequence of sets of the specified domains, with all samples matching the possibly specified match_fn
     """

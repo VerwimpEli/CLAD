@@ -22,8 +22,6 @@ def main():
                         help='Num workers to use for dataloading')
     parser.add_argument('--store', action='store_true',
                         help="If set the prediciton files required for submission will be created")
-    parser.add_argument('--test', action='store_true',
-                        help='If set model will be evaluated on test set, else on validation set')
     parser.add_argument('--no_cuda', action='store_true',
                         help='If set, training will be on the CPU')
     parser.add_argument('--store_model', action='store_true',
@@ -39,12 +37,11 @@ def main():
     criterion = torch.nn.CrossEntropyLoss()
     batch_size = 10
 
-    plugins = []
-
     cladc = cladc_avalanche(args.root)
 
     text_logger = TextLogger(open(f"./{args.name}.log", 'w'))
     interactive_logger = InteractiveLogger()
+    plugins = []
 
     eval_plugin = EvaluationPlugin(
         accuracy_metrics(stream=True), loss_metrics(stream=True), amca_metrics(),
@@ -52,7 +49,7 @@ def main():
 
     strategy = Naive(
         model, optimizer, criterion, train_mb_size=batch_size, train_epochs=1, eval_mb_size=256, device=device,
-        evaluator=eval_plugin, eval_every=1, plugins=plugins)
+        evaluator=eval_plugin, plugins=plugins)
 
     for i, experience in enumerate(cladc.train_stream):
 

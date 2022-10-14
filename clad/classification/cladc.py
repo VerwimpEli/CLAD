@@ -24,7 +24,8 @@ def get_cladc_train(root: str, transform: Callable = None, img_size: int = 64, a
 
     # All training images are part of the original validation set of SODA10M.
     annot_file = os.path.join(root, 'SSLAD-2D', 'labeled', 'annotations', 'instance_val.json')
-    train_sets = [get_matching_classification_set(root, annot_file, mf, img_size=img_size, transform=transform) for mf in match_fn]
+    train_sets = [get_matching_classification_set(root, annot_file, mf, img_size=img_size, transform=transform) for mf
+                  in match_fn]
 
     for ts in train_sets:
         ts.chronological_sort()
@@ -92,8 +93,8 @@ def get_cladc_domain_test(root: str, transform: Callable = None, img_size: int =
     combinations of domains exist.
     """
     annot_file = os.path.join(root, 'labeled', 'annotations', 'instance_test.json')
-    test_sets = get_domain_sets(root, annot_file, ["period", "weather", "city", "location"],
-                                img_size=img_size, transform=transform)
+    test_sets = get_cladc_domain_sets(root, annot_file, ["period", "weather", "city", "location"],
+                                      img_size=img_size, transform=transform)
 
     if avalanche:
         from avalanche.benchmarks.utils import AvalancheDataset
