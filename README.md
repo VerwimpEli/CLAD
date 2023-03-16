@@ -19,11 +19,14 @@ and the solutions proposed by the participants in the 2021 ICCV challenge with C
 If you use this benchmark, please cite:
 
 ```
-@article{verwimp2022cl,
-  title = {CLAD: A realistic Continual Learning benchmark for Autonomous Driving},
-  author={Verwimp, Eli and Yang, Kuo and Parisot, Sarah and Lanqing, Hong and McDonagh, Steven and P{\'e}rez-Pellitero, Eduardo and De Lange, Matthias and Tuytelaars, Tinne},
-  journal = {arXiv preprint arXiv:2210.03482},
-  year = {2022}
+@article{verwimp2023clad,
+  title={CLAD: A realistic Continual Learning benchmark for Autonomous Driving},
+  author={Verwimp, Eli and Yang, Kuo and Parisot, Sarah and Hong, Lanqing and McDonagh, Steven and P{\'e}rez-Pellitero, Eduardo and De Lange, Matthias and Tuytelaars, Tinne},
+  journal={Neural Networks},
+  volume={161},
+  pages={659--669},
+  year={2023},
+  publisher={Elsevier}
 }
 ```
 ## Installation
