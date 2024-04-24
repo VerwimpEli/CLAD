@@ -43,10 +43,11 @@ Add the installation directory to your python path. On Linux:
 ```bash
 export PYTHONPATH=$PYTHONPATH:[clad_installation_folder]
 ```
-_(Optional)_ Install the Avalanche master branch. Their pip-module doens't have all functionalities we use.
+_(Optional)_ Install Avalanche version 0.2.0. Their are some breaking changes in later versions, I will come to them at some point.
 ```bash
-pip install git+https://github.com/ContinualAI/avalanche.git
+pip install avalanche-lib[detection]==0.2.0
 ```
+*Note: there might be an import issue regarding Kinectis400 with this version of Avalanche. Just comment it out, we don't need it*
 
 _(Optional)_ Install Detectron2, follow the instructions
 [here](https://detectron2.readthedocs.io/en/latest/tutorials/install.html) for your Pytorch and Cuda installations.
